@@ -16,6 +16,7 @@ chrome_options = webdriver.ChromeOptions()
 prefs = {'download.default_directory': download_directory}
 chrome_options.add_experimental_option('prefs', prefs)
 browser = webdriver.Chrome("C:/chromedriver.exe", chrome_options=chrome_options)
+browser.maximize_window()
 
 
 def find_nth(haystack, needle, n):
@@ -101,6 +102,8 @@ def populate_main():
     info = rating_area[0].get_attribute("title")
     pos = info.find(' ')
     info = info[:pos]
+    if info == "No":
+        info = "0"
     item.append(info)
 
     check_archive = browser.find_elements_by_class_name("priceArchive")
@@ -127,7 +130,7 @@ def populate_main():
     retry = True
 
     while retry:
-        print("Trying...")
+        # print("Trying...")
         init_dep = tooltip_further_data[1].find_element_by_class_name("value").text
         deposits = tooltip_further_data[2].find_element_by_class_name("value").text
         withdrawals = tooltip_further_data[3].find_element_by_class_name("value").text
@@ -137,16 +140,21 @@ def populate_main():
         if init_dep and deposits and withdrawals and balance and equity:
             retry = False
 
-    currency = init_dep[-3:]
-    init_dep = init_dep[:-4]
+    pos = init_dep.rfind(' ')
+    currency = init_dep[pos+1:]
+    init_dep = init_dep[:pos]
     init_dep = init_dep.replace(" ", "")
-    deposits = deposits[:-4]
+    pos = deposits.rfind(' ')
+    deposits = deposits[:pos]
     deposits = deposits.replace(" ", "")
-    withdrawals = withdrawals[:-4]
+    pos = withdrawals.rfind(' ')
+    withdrawals = withdrawals[:pos]
     withdrawals = withdrawals.replace(" ", "")
-    balance = balance[:-4]
+    pos = balance.rfind(' ')
+    balance = balance[:pos]
     balance = balance.replace(" ", "")
-    equity = equity[:-4]
+    pos = equity.rfind(' ')
+    equity = equity[:pos]
     equity = equity.replace(" ", "")
 
     if len(overall_data) is 3:
@@ -156,7 +164,8 @@ def populate_main():
 
     index = 1
 
-    profit = subs = subs_funds = max_dd = max_dd_amt = weeks = latest_trade = trades_per_week = avg_holding_time = ""
+    profit = subs = subs_funds = max_dd = max_dd_amt = weeks = latest_trade = trades_per_week = avg_holding_time = \
+        profit_tool_tip = ""
 
     if index <= (len(tooltip_data) - 1):
         name = tooltip_data[index].find_element_by_class_name("header").text
@@ -164,9 +173,17 @@ def populate_main():
         name = name[:pos]
         if name == "Profit" and index <= (len(tooltip_data)-1):
             profit = tooltip_data[index].find_element_by_class_name("header").find_element_by_tag_name("span").text
-            profit = profit[:-4]
+            pos = profit.rfind(' ')
+            profit = profit[:pos]
             profit = profit.replace(" ", "")
             index = index + 1
+
+    info = overall_data[0].find_elements_by_class_name("info")
+    if info:
+        # print(len(info))
+        # new_info = info[0].find_element_by_tag_name("p")
+        profit_tool_tip = info[0].text
+        # print(profit_tool_tip)
 
     if index <= (len(tooltip_data) - 1):
         name = tooltip_data[index].find_element_by_class_name("header").text
@@ -194,9 +211,10 @@ def populate_main():
             max_dd = max_dd[:-1]
 
             max_dd_amt = tooltip_data[index].get_attribute("title")
-            max_dd_amt = max_dd_amt[:-4]
             pos = max_dd_amt.rfind(' ')
-            max_dd_amt = max_dd_amt[pos + 1:]
+            max_dd_amt = max_dd_amt[:pos]
+            pos = max_dd_amt.rfind(' ')
+            max_dd_amt = max_dd_amt[pos+1:]
             index = index + 1
 
     if index <= (len(tooltip_data) - 1):
@@ -214,9 +232,16 @@ def populate_main():
         if name == "Latest trade":
             latest_trade = tooltip_data[index].find_element_by_class_name("header").find_element_by_tag_name("span").text
             pos = latest_trade.find(' ')
+            unit = latest_trade[pos+1:]
             latest_trade = latest_trade[:pos]
             latest_trade = int(latest_trade)
-            latest_trade = latest_trade * 3600
+            if unit == "days ago" or unit == "day ago":
+                latest_trade = latest_trade * 1440
+            elif unit == "hour ago" or unit == "hours ago":
+                latest_trade = latest_trade * 60
+            else:
+                print("ERROR IN LATEST TRADE [CHECK]")
+                print("UNIT: " + unit)
             index = index + 1
 
     if index <= (len(tooltip_data) - 1):
@@ -235,9 +260,18 @@ def populate_main():
             avg_holding_time = tooltip_data[index].find_element_by_class_name("header").find_element_by_tag_name(
                 "span").text
             pos = avg_holding_time.find(' ')
+            unit = avg_holding_time[pos+1:]
             avg_holding_time = avg_holding_time[:pos]
             avg_holding_time = int(avg_holding_time)
-            avg_holding_time = avg_holding_time * 3600
+            if unit == "minutes":
+                avg_holding_time = avg_holding_time * 60
+            elif unit == "hours":
+                avg_holding_time = avg_holding_time * 3600
+            elif unit == "days" or unit == "day":
+                avg_holding_time = avg_holding_time * 86400
+            else:
+                print("ERROR in Avg Holding time [Check]")
+                print("UNIT: " + unit)
 
     more_data = overall_data[-1].find_elements_by_class_name("item")
 
@@ -263,6 +297,7 @@ def populate_main():
     item.append(balance)
     item.append(equity)
     item.append(profit)
+    item.append(profit_tool_tip)
     item.append(subs)
     item.append(subs_funds)
     item.append(max_dd)
@@ -284,6 +319,16 @@ def populate_main():
     x_axis_data = x_axis_data[:len(x_axis_data) - 1]
 
     equity_start_date = x_axis_data[find_nth(x_axis_data, "},'", 2) + 3: find_nth(x_axis_data, "':{", 3)]
+    if len(equity_start_date) is 6 or len(equity_start_date) is 7:
+        pos = equity_start_date.find('.')
+        month = equity_start_date[pos+1:]
+        if month == "1" or month == "3" or month == "5" or month == "7" or month == "8" or month == "10" or month == "12":
+            day = "31"
+        elif month == "2":
+            day = "28"
+        else:
+            day = "30"
+        equity_start_date = equity_start_date[:] + "." + day
     item.append(equity_start_date)
 
     # Collecting Stats
@@ -303,19 +348,23 @@ def populate_main():
             item.append(data_to_append)
             data_to_append = data_to_append_2
         elif i is 3 or i is 4 or i is 16 or i is 17 or i is 18:
-            data_to_append = data_to_append[:-4]
+            pos = data_to_append.rfind(' ')
+            data_to_append = data_to_append[:pos]
             data_to_append = data_to_append.replace(" ", "")
         elif i is 5 or i is 6:
             pos = data_to_append.find('(')
             data_to_append_2 = data_to_append[pos+1:-6]
-            data_to_append = data_to_append[:pos-5]
+            data_to_append = data_to_append[:pos-1]
+            pos = data_to_append.rfind(' ')
+            data_to_append = data_to_append[:pos]
             data_to_append = data_to_append.replace(" ", "")
             data_to_append_2 = data_to_append_2.replace(" ", "")
             item.append(data_to_append)
             data_to_append = data_to_append_2
         elif i is 7 or i is 19:
             pos = data_to_append.find('(')
-            data_to_append_2 = data_to_append[pos+1:-5]
+            pos2 = data_to_append.rfind(' ')
+            data_to_append_2 = data_to_append[pos+1:pos2]
             data_to_append = data_to_append[:pos-1]
             data_to_append = data_to_append.replace(" ", "")
             data_to_append_2 = data_to_append_2.replace(" ", "")
@@ -324,7 +373,9 @@ def populate_main():
         elif i is 8 or i is 20:
             pos = data_to_append.find('(')
             data_to_append_2 = data_to_append[pos+1:-1]
-            data_to_append = data_to_append[:pos-5]
+            data_to_append = data_to_append[:pos-1]
+            pos = data_to_append.rfind(' ')
+            data_to_append = data_to_append[:pos]
             data_to_append = data_to_append.replace(" ", "")
             data_to_append_2 = data_to_append_2.replace(" ", "")
             item.append(data_to_append)
@@ -342,11 +393,14 @@ def populate_main():
         for i in range(len(all_val)):
             val = all_val[i].find_element_by_class_name("value").text
             if i is 0 or i is 3:
+                pos = val.rfind(' ')
+                val = val[:pos]
                 val = val.replace(" ", "")
-                val = val[:-3]
+                # val = val[:-3]
             elif i is 1 or i is 4:
                 pos = val.find(' ')
-                val_2 = val[pos+2:-5]
+                pos2 = val.rfind(' ')
+                val_2 = val[pos+2:pos2]
                 val_2 = val_2.replace(" ", "")
                 val = val[:pos]
                 item.append(val)
@@ -355,8 +409,10 @@ def populate_main():
                 pos = val.rfind(' ')
                 val_2 = val[pos+2:-1]
                 val = val[:pos]
+                pos = val.rfind(' ')
+                val = val[:pos]
                 val = val.replace(" ", "")
-                val = val[:-3]
+                # val = val[:-3]
                 item.append(val)
                 val = val_2
             item.append(val)
@@ -364,14 +420,16 @@ def populate_main():
     cols = info[2].find_elements_by_class_name("column")
     all_val = cols[0].find_elements_by_class_name("item")
     dd_bal_abs = all_val[1].find_element_by_class_name("value").text
-    dd_bal_abs = dd_bal_abs[:-4]
+    pos = dd_bal_abs.rfind(' ')
+    dd_bal_abs = dd_bal_abs[:pos]
     item.append(dd_bal_abs)
 
     dd_bal_max = all_val[2].find_element_by_class_name("value").text
     pos = dd_bal_max.rfind(' ')
     dd_bal_max_pct = dd_bal_max[pos + 2:-2]
     dd_bal_max_amt = dd_bal_max[:pos]
-    dd_bal_max_amt = dd_bal_max_amt[:-4]
+    pos = dd_bal_max_amt.rfind(' ')
+    dd_bal_max_amt = dd_bal_max_amt[:pos]
     dd_bal_max_amt = dd_bal_max_amt.replace(" ", "")
     item.append(dd_bal_max_amt)
     item.append(dd_bal_max_pct)
@@ -379,7 +437,8 @@ def populate_main():
     all_val = cols[1].find_elements_by_class_name("item")
     rdd_bal = all_val[1].find_element_by_class_name("value").text
     pos = rdd_bal.find(' ')
-    rdd_bal_amt = rdd_bal[pos + 2:-5]
+    pos2 = rdd_bal.rfind(' ')
+    rdd_bal_amt = rdd_bal[pos+2:pos2]
     rdd_bal_amt = rdd_bal_amt.replace(" ", "")
     rdd_bal_pct = rdd_bal[:pos-1]
     item.append(rdd_bal_amt)
@@ -388,7 +447,8 @@ def populate_main():
     all_val = cols[1].find_elements_by_class_name("item")
     rdd_equity = all_val[2].find_element_by_class_name("value").text
     pos = rdd_equity.find(' ')
-    rdd_equity_amt = rdd_equity[pos + 2:-5]
+    pos2 = rdd_equity.rfind(' ')
+    rdd_equity_amt = rdd_equity[pos+2:pos2]
     rdd_equity_amt = rdd_equity_amt.replace(" ", "")
     rdd_equity_pct = rdd_equity[:pos-1]
     item.append(rdd_equity_amt)
@@ -536,8 +596,10 @@ def populate_slippage():
 
                 val1 = all_rows[i].find_element_by_class_name("bar")
                 val_text = val1.text
-                val_text2 = val_text[:5] + "X " + val_text[7:]
-                row_data.append(val_text2)
+                amount = val_text[:4]
+                amount2 = val_text[7:]
+                row_data.append(amount)
+                row_data.append(amount2)
 
                 data.append(row_data)
 
@@ -586,8 +648,10 @@ def populate_review():
         customer_reviews = customer_reviews[0].find_elements_by_class_name("comment")
 
         for customer_review in customer_reviews:
-            placeholder = customer_review.find_element_by_class_name("text")
-            placeholder.find_element_by_class_name("commands").find_elements_by_tag_name("span")[-1].click()
+            placeholder = customer_review.find_element_by_class_name("text").find_element_by_class_name("commands")\
+                .find_elements_by_tag_name("span")
+            if placeholder:
+                placeholder[-1].click()
 
         reviews = browser.find_element_by_id("reviews")
         customer_reviews = reviews.find_elements_by_class_name("customer-reviews")
@@ -624,6 +688,29 @@ def populate_review():
     return data
 
 
+def populate_news():
+    data = []
+    news_tab = browser.find_elements_by_id("tab_news")
+
+    if news_tab:
+        news_tab[0].click()
+
+        updates = browser.find_elements_by_class_name("signal_update")
+        for update in updates:
+            row_data = []
+            timestamp = update.find_element_by_class_name("timestamp")
+            row_data.append(timestamp.text)
+            options = timestamp.find_elements_by_class_name("options")
+            if options:
+                options[0].find_element_by_class_name("command").click()
+                row_data.append(update.find_element_by_class_name("content").text)
+            else:
+                row_data.append(update.find_element_by_class_name("text").text)
+            data.append(row_data)
+
+    return data
+
+
 def write_csv(name, data):
     name = name + ".csv"
 
@@ -645,7 +732,7 @@ def write_csv(name, data):
     outfile.close()
 
 
-def write_data(main, positions, history, symbols, slippage, description, review):
+def write_data(main, positions, history, symbols, slippage, description, review, news):
     data = ["URL", "Time", "Type", "Volume", "Symbol", "Price", "S/L", "T/P", "Price", "Commission", "Swap", "Profit"]
     positions.insert(0, data)
     write_csv("positions", positions)
@@ -659,7 +746,7 @@ def write_data(main, positions, history, symbols, slippage, description, review)
     symbols.insert(0, data)
     write_csv("symbols", symbols)
 
-    data = ["URL", "Title", "Amount"]
+    data = ["URL", "Title", "Amount", "Amount2"]
     slippage.insert(0, data)
     write_csv("slippage", slippage)
 
@@ -671,9 +758,13 @@ def write_data(main, positions, history, symbols, slippage, description, review)
     review.insert(0, data)
     write_csv("review", review)
 
+    data = ["Timestamp", "Message"]
+    news.insert(0, data)
+    write_csv("whatsNew", news)
+
     # Stats start from Trades, Risks start from BestTrade
     data = ["URL", "SignalName", "Rating", "ReviewCount", "Cost", "Growth", "TooltipDesc", "AccCurrency",
-            "InitialDeposit", "Deposits", "Withdrawals", "Balance", "Equity", "Profit", "Subscribers",
+            "InitialDeposit", "Deposits", "Withdrawals", "Balance", "Equity", "Profit", "ProfitToolTip", "Subscribers",
             "SubscribersFunds", "MaxDDPct", "MaxDDAmt", "Weeks", "LatestTrade", "TradesPerWeek", "AvgHoldingTime", "Broker", "BrokerName", "Leverage",
             "TradingMode", "Author", "AuthorCode", "EquityStDate", "Trades", "ProfitTradeNo", "ProfitTradePct",
             "LossTradesNo", "LossTradesPct", "BestTrade", "WorstTrade", "GrossProfitAmt", "GrossProfitPips",
@@ -739,9 +830,11 @@ if __name__ == "__main__":
             # print("Gathering Reviews...")
             review_data = populate_review()
 
+            news_data = populate_news()
+
             # print("Writing all data...")
             write_data(main_data, position_data, history_data, symbols_data, slippage_data, description_data,
-                       review_data)
+                       review_data, news_data)
 
         counter = counter + 1
         print(str(counter) + " DONE. %Complete: " + str(counter/len(links) * 100) + "%")
